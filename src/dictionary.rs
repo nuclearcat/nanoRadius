@@ -93,10 +93,10 @@ impl Dictionary {
     pub fn lookup_vendor_attr(&self, name: &str) -> Option<(u32, u8, &VendorAttributeMeta)> {
         // Look for "Vendor-Attr" format (e.g., "Mikrotik-Rate-Limit")
         for (vendor_id, vendor) in &self.vendors {
-            if let Some(code) = vendor.names.get(&name.to_ascii_lowercase()) {
-                if let Some(meta) = vendor.attrs.get(code) {
-                    return Some((*vendor_id, *code, meta));
-                }
+            if let Some(code) = vendor.names.get(&name.to_ascii_lowercase())
+                && let Some(meta) = vendor.attrs.get(code)
+            {
+                return Some((*vendor_id, *code, meta));
             }
         }
         None
@@ -111,12 +111,11 @@ impl Dictionary {
                     return self.describe_vsa(&attr.data);
                 }
                 let name = self.attrs.get(&attr.typ).map(|m| m.name.as_str());
-                if let Some(meta) = self.attrs.get(&attr.typ) {
-                    if let Some(value) =
+                if let Some(meta) = self.attrs.get(&attr.typ)
+                    && let Some(value) =
                         parse_integer(&attr.data).and_then(|v| meta.enums.get(&v).map(|l| (v, l)))
-                    {
-                        return format!("{}={} ({})", meta.name, value.1, value.0);
-                    }
+                {
+                    return format!("{}={} ({})", meta.name, value.1, value.0);
                 }
                 match (name, String::from_utf8(attr.data.clone())) {
                     (Some(name), Ok(text)) => format!("{}='{}'", name, text),
@@ -243,6 +242,16 @@ fn parse_integer(value: &[u8]) -> Option<u32> {
     }
 }
 
+fn parse_kind(raw: Option<&str>) -> AttrType {
+    match raw.map(|s| s.to_ascii_lowercase()) {
+        Some(ref t) if t == "octets" || t == "bytes" => AttrType::Octets,
+        Some(ref t) if t == "integer" || t == "int" || t == "u32" => AttrType::Integer,
+        Some(ref t) if t == "ipaddr" || t == "ipv4" => AttrType::IpAddr,
+        Some(_) => AttrType::String,
+        None => AttrType::String,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -261,15 +270,5 @@ mod tests {
         };
         let desc = dict.describe_attributes(&[vsa]);
         assert_eq!(desc, "Mikrotik-Rate-Limit='5M/10M'");
-    }
-}
-
-fn parse_kind(raw: Option<&str>) -> AttrType {
-    match raw.map(|s| s.to_ascii_lowercase()) {
-        Some(ref t) if t == "octets" || t == "bytes" => AttrType::Octets,
-        Some(ref t) if t == "integer" || t == "int" || t == "u32" => AttrType::Integer,
-        Some(ref t) if t == "ipaddr" || t == "ipv4" => AttrType::IpAddr,
-        Some(_) => AttrType::String,
-        None => AttrType::String,
     }
 }

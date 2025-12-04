@@ -88,7 +88,7 @@ impl RadiusPacket {
         }
         let mut ctx = Md5::new();
         ctx.update(&buffer[0..4]);
-        ctx.update(&request.authenticator);
+        ctx.update(request.authenticator);
         if buffer.len() > 20 {
             ctx.update(&buffer[20..]);
         }
@@ -149,6 +149,48 @@ pub enum RadiusCode {
     AccountingResponse = 5,
 }
 
+fn hmac_md5(key: &[u8], data: &[u8]) -> [u8; 16] {
+    let mut key_block = [0u8; 64];
+    if key.len() > 64 {
+        let mut ctx = Md5::new();
+        ctx.update(key);
+        key_block.copy_from_slice(&ctx.finalize());
+    } else {
+        key_block[..key.len()].copy_from_slice(key);
+    }
+
+    let mut ipad = [0u8; 64];
+    let mut opad = [0u8; 64];
+    for i in 0..64 {
+        ipad[i] = key_block[i] ^ 0x36;
+        opad[i] = key_block[i] ^ 0x5c;
+    }
+
+    let mut inner = Md5::new();
+    inner.update(ipad);
+    inner.update(data);
+    let inner_hash = inner.finalize();
+
+    let mut outer = Md5::new();
+    outer.update(opad);
+    outer.update(inner_hash);
+    let digest = outer.finalize();
+    let mut out = [0u8; 16];
+    out.copy_from_slice(&digest);
+    out
+}
+
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for i in 0..a.len() {
+        diff |= a[i] ^ b[i];
+    }
+    diff == 0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -190,7 +232,7 @@ mod tests {
         // Validate authenticator matches MD5(header + request_auth + attrs + secret)
         let mut ctx = Md5::new();
         ctx.update(&reply[0..4]);
-        ctx.update(&request.authenticator);
+        ctx.update(request.authenticator);
         ctx.update(secret.as_bytes());
         let expected = ctx.finalize();
         assert_eq!(parsed.authenticator, expected.as_slice());
@@ -259,46 +301,4 @@ mod tests {
         let result = RadiusPacket::verify_message_authenticator(&data, secret).unwrap();
         assert_eq!(result, Some(false));
     }
-}
-
-fn hmac_md5(key: &[u8], data: &[u8]) -> [u8; 16] {
-    let mut key_block = [0u8; 64];
-    if key.len() > 64 {
-        let mut ctx = Md5::new();
-        ctx.update(key);
-        key_block.copy_from_slice(&ctx.finalize());
-    } else {
-        key_block[..key.len()].copy_from_slice(key);
-    }
-
-    let mut ipad = [0u8; 64];
-    let mut opad = [0u8; 64];
-    for i in 0..64 {
-        ipad[i] = key_block[i] ^ 0x36;
-        opad[i] = key_block[i] ^ 0x5c;
-    }
-
-    let mut inner = Md5::new();
-    inner.update(&ipad);
-    inner.update(data);
-    let inner_hash = inner.finalize();
-
-    let mut outer = Md5::new();
-    outer.update(&opad);
-    outer.update(inner_hash);
-    let digest = outer.finalize();
-    let mut out = [0u8; 16];
-    out.copy_from_slice(&digest);
-    out
-}
-
-fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    let mut diff = 0u8;
-    for i in 0..a.len() {
-        diff |= a[i] ^ b[i];
-    }
-    diff == 0
 }

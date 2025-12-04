@@ -13,7 +13,8 @@ pub fn decrypt_user_password(
     secret: &str,
     request_authenticator: &[u8; 16],
 ) -> Result<Vec<u8>> {
-    if encrypted.is_empty() || encrypted.len() % 16 != 0 {
+    let aligned = encrypted.len() / 16 * 16 == encrypted.len();
+    if encrypted.is_empty() || !aligned {
         return Err("invalid User-Password attribute length".into());
     }
     let mut result = Vec::with_capacity(encrypted.len());
@@ -21,7 +22,7 @@ pub fn decrypt_user_password(
     for chunk in encrypted.chunks(16) {
         let mut ctx = Md5::new();
         ctx.update(secret.as_bytes());
-        ctx.update(&last_block);
+        ctx.update(last_block);
         let hash = ctx.finalize();
         let mut plain_block = vec![0u8; chunk.len()];
         for (i, byte) in chunk.iter().enumerate() {
@@ -88,7 +89,7 @@ mod tests {
         let mut padded = clear.to_vec();
         if padded.is_empty() {
             padded.resize(16, 0);
-        } else if padded.len() % 16 != 0 {
+        } else if padded.len() / 16 * 16 != padded.len() {
             let pad = 16 - (padded.len() % 16);
             padded.resize(padded.len() + pad, 0);
         }
@@ -97,7 +98,7 @@ mod tests {
         for chunk in padded.chunks(16) {
             let mut ctx = Md5::new();
             ctx.update(secret.as_bytes());
-            ctx.update(&last_block);
+            ctx.update(last_block);
             let hash = ctx.finalize();
             let mut cipher_block = [0u8; 16];
             for (i, byte) in chunk.iter().enumerate() {
