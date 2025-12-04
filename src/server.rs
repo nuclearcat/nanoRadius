@@ -1,10 +1,13 @@
+// Copyright (c) 2025 Denys Fedoryshchenko <denys.f@collabora.com>
+// SPDX-License-Identifier: GPL-3.0-or-later OR LicenseRef-Proprietary
+
 use std::net::UdpSocket;
 use std::sync::Arc;
 
-use crate::accounting::handle_accounting_packet;
-use crate::handle_auth_packet;
 use crate::Result;
 use crate::SharedState;
+use crate::accounting::handle_accounting_packet;
+use crate::handle_auth_packet;
 
 pub fn run_auth_server(addr: &str, state: Arc<SharedState>) -> Result<()> {
     let socket = UdpSocket::bind(addr)?;

@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Denys Fedoryshchenko <denys.f@collabora.com>
+// SPDX-License-Identifier: GPL-3.0-or-later OR LicenseRef-Proprietary
+
 use md5::{Digest, Md5};
 
 use crate::user_db::UserDb;

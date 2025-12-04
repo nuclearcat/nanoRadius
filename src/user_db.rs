@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Denys Fedoryshchenko <denys.f@collabora.com>
+// SPDX-License-Identifier: GPL-3.0-or-later OR LicenseRef-Proprietary
+
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
@@ -84,10 +87,15 @@ fn encode_reply_attrs(reply: &[RawReply], dictionary: &Dictionary) -> Result<Vec
         }
 
         // Try vendor-specific attributes
-        if let Some((vendor_id, vendor_type, vendor_meta)) = dictionary.lookup_vendor_attr(&attr.typ) {
+        if let Some((vendor_id, vendor_type, vendor_meta)) =
+            dictionary.lookup_vendor_attr(&attr.typ)
+        {
             let value_data = encode_value(Some(vendor_meta.kind), &attr.value)?;
             let vsa_data = encode_vsa(vendor_id, vendor_type, &value_data)?;
-            out.push(RadiusAttribute { typ: 26, data: vsa_data });
+            out.push(RadiusAttribute {
+                typ: 26,
+                data: vsa_data,
+            });
             continue;
         }
 

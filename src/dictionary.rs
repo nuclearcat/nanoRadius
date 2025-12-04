@@ -1,11 +1,14 @@
+// Copyright (c) 2025 Denys Fedoryshchenko <denys.f@collabora.com>
+// SPDX-License-Identifier: GPL-3.0-or-later OR LicenseRef-Proprietary
+
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
 use serde::Deserialize;
 
-use crate::radius::RadiusAttribute;
 use crate::Result;
+use crate::radius::RadiusAttribute;
 
 #[derive(Deserialize)]
 struct RawDictionary {
@@ -121,7 +124,12 @@ impl Dictionary {
                         format!("{} len {} ({:02x?})", name, attr.data.len(), attr.data)
                     }
                     (None, Ok(text)) => format!("type {}='{}'", attr.typ, text),
-                    (None, Err(_)) => format!("type {} len {} ({:02x?})", attr.typ, attr.data.len(), attr.data),
+                    (None, Err(_)) => format!(
+                        "type {} len {} ({:02x?})",
+                        attr.typ,
+                        attr.data.len(),
+                        attr.data
+                    ),
                 }
             })
             .collect::<Vec<_>>()
@@ -149,7 +157,9 @@ impl Dictionary {
             }
             match String::from_utf8(value.to_vec()) {
                 Ok(text) => return format!("{}-Unknown-{}='{}'", vendor.name, vendor_type, text),
-                Err(_) => return format!("{}-Unknown-{} ({:02x?})", vendor.name, vendor_type, value),
+                Err(_) => {
+                    return format!("{}-Unknown-{} ({:02x?})", vendor.name, vendor_type, value);
+                }
             }
         }
 
@@ -195,7 +205,9 @@ impl Dictionary {
             let mut vendor_attrs = HashMap::new();
             let mut vendor_attr_names = HashMap::new();
             for (attr_code_str, raw_attr) in raw_vendor.attributes {
-                let attr_code: u8 = attr_code_str.parse().expect("vendor attribute code must be u8");
+                let attr_code: u8 = attr_code_str
+                    .parse()
+                    .expect("vendor attribute code must be u8");
                 vendor_attr_names.insert(raw_attr.name.to_ascii_lowercase(), attr_code);
                 vendor_attrs.insert(
                     attr_code,
@@ -215,7 +227,11 @@ impl Dictionary {
             );
         }
 
-        Self { attrs, names, vendors }
+        Self {
+            attrs,
+            names,
+            vendors,
+        }
     }
 }
 
@@ -238,8 +254,8 @@ mod tests {
             typ: 26,
             data: vec![
                 0x00, 0x00, 0x3A, 0x8C, // Vendor ID 14988
-                8, // vendor type (Mikrotik-Rate-Limit)
-                8, // vendor length (value len + 2)
+                8,    // vendor type (Mikrotik-Rate-Limit)
+                8,    // vendor length (value len + 2)
                 b'5', b'M', b'/', b'1', b'0', b'M',
             ],
         };

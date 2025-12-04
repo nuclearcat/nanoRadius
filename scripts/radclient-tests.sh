@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2025 Denys Fedoryshchenko <denys.f@collabora.com>
+# SPDX-License-Identifier: GPL-3.0-or-later OR LicenseRef-Proprietary
+
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

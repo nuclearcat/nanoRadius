@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Denys Fedoryshchenko <denys.f@collabora.com>
+// SPDX-License-Identifier: GPL-3.0-or-later OR LicenseRef-Proprietary
+
 use clap::Parser;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -16,15 +19,15 @@ mod pap_auth;
 mod radius;
 mod server;
 mod user_db;
-use dictionary::Dictionary;
 use chap_auth::verify_chap_password;
+use dictionary::Dictionary;
 use logger::Logger;
 use pap_auth::{
     decrypt_user_password, extract_pap_password, format_password_debug, trim_trailing_zeros,
 };
 use radius::{RadiusCode, RadiusPacket};
 use server::{run_accounting_server, run_auth_server};
-use user_db::{verify_credentials, UserDb};
+use user_db::{UserDb, verify_credentials};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
@@ -218,9 +221,10 @@ pub(crate) fn handle_auth_packet(
         }
         Ok(_) => {}
         Err(err) => {
-            state
-                .logger
-                .log("WARN", &format!("Failed to verify Message-Authenticator: {err}"));
+            state.logger.log(
+                "WARN",
+                &format!("Failed to verify Message-Authenticator: {err}"),
+            );
             return;
         }
     }
@@ -469,7 +473,10 @@ value = "5M/10M"
             .find(|a| a.typ == 26)
             .expect("Vendor-Specific attribute present");
         assert!(vsa.data.len() >= 7);
-        assert_eq!(u32::from_be_bytes([vsa.data[0], vsa.data[1], vsa.data[2], vsa.data[3]]), 14988);
+        assert_eq!(
+            u32::from_be_bytes([vsa.data[0], vsa.data[1], vsa.data[2], vsa.data[3]]),
+            14988
+        );
         assert_eq!(vsa.data[4], 8); // Mikrotik-Rate-Limit
         assert_eq!(&vsa.data[6..], b"5M/10M");
 

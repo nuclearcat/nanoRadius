@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Denys Fedoryshchenko <denys.f@collabora.com>
+// SPDX-License-Identifier: GPL-3.0-or-later OR LicenseRef-Proprietary
+
 use crate::Result;
 use md5::{Digest, Md5};
 
@@ -206,13 +209,9 @@ mod tests {
             typ: 1,
             data: vec![0u8; 254],
         };
-        let err = RadiusPacket::build_response(
-            RadiusCode::AccessAccept,
-            &request,
-            "secret",
-            &[big_attr],
-        )
-        .unwrap_err();
+        let err =
+            RadiusPacket::build_response(RadiusCode::AccessAccept, &request, "secret", &[big_attr])
+                .unwrap_err();
         assert!(err.to_string().contains("too long"));
     }
 
@@ -244,12 +243,7 @@ mod tests {
     #[test]
     fn detects_bad_message_authenticator() {
         let secret = "sharedsecret";
-        let mut data = vec![
-            RadiusCode::AccessRequest as u8,
-            1,
-            0,
-            38,
-        ];
+        let mut data = vec![RadiusCode::AccessRequest as u8, 1, 0, 38];
         data.extend_from_slice(&[0x22; 16]);
         data.push(80);
         data.push(18);

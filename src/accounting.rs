@@ -1,13 +1,16 @@
+// Copyright (c) 2025 Denys Fedoryshchenko <denys.f@collabora.com>
+// SPDX-License-Identifier: GPL-3.0-or-later OR LicenseRef-Proprietary
+
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::sync::Arc;
 
 use md5::{Digest, Md5};
 
+use crate::Dictionary;
+use crate::NasDevice;
 use crate::logger::Logger;
 use crate::radius::{RadiusCode, RadiusPacket};
-use crate::NasDevice;
-use crate::Dictionary;
 
 pub fn handle_accounting_packet(
     data: &[u8],
@@ -84,10 +87,16 @@ pub fn handle_accounting_packet(
     match RadiusPacket::build_response(RadiusCode::AccountingResponse, &packet, &nas.secret, &[]) {
         Ok(response) => {
             if let Err(err) = socket.send_to(&response, src) {
-                logger.log("ERROR", &format!("Failed to send accounting response: {err}"));
+                logger.log(
+                    "ERROR",
+                    &format!("Failed to send accounting response: {err}"),
+                );
             }
         }
-        Err(err) => logger.log("ERROR", &format!("Failed to build accounting response: {err}")),
+        Err(err) => logger.log(
+            "ERROR",
+            &format!("Failed to build accounting response: {err}"),
+        ),
     }
 }
 
@@ -162,7 +171,11 @@ mod tests {
         let packet_bytes = build_acct_request(secret, &user_attr());
         let parsed = RadiusPacket::parse(&packet_bytes).expect("parse succeeds");
 
-        assert!(verify_accounting_authenticator(&packet_bytes, &parsed, secret));
+        assert!(verify_accounting_authenticator(
+            &packet_bytes,
+            &parsed,
+            secret
+        ));
     }
 
     #[test]
@@ -173,7 +186,11 @@ mod tests {
         packet_bytes[last] ^= 0xFF;
         let parsed = RadiusPacket::parse(&packet_bytes).expect("parse succeeds");
 
-        assert!(!verify_accounting_authenticator(&packet_bytes, &parsed, secret));
+        assert!(!verify_accounting_authenticator(
+            &packet_bytes,
+            &parsed,
+            secret
+        ));
     }
 
     #[test]
@@ -185,7 +202,9 @@ mod tests {
         let mut truncated = full.clone();
         truncated.truncate(10);
 
-        assert!(!verify_accounting_authenticator(&truncated, &parsed, secret));
+        assert!(!verify_accounting_authenticator(
+            &truncated, &parsed, secret
+        ));
     }
 
     #[test]
