@@ -227,6 +227,27 @@ fn parse_integer(value: &[u8]) -> Option<u32> {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn describes_mikrotik_vsa() {
+        let dict = Dictionary::builtin();
+        let vsa = RadiusAttribute {
+            typ: 26,
+            data: vec![
+                0x00, 0x00, 0x3A, 0x8C, // Vendor ID 14988
+                8, // vendor type (Mikrotik-Rate-Limit)
+                8, // vendor length (value len + 2)
+                b'5', b'M', b'/', b'1', b'0', b'M',
+            ],
+        };
+        let desc = dict.describe_attributes(&[vsa]);
+        assert_eq!(desc, "Mikrotik-Rate-Limit='5M/10M'");
+    }
+}
+
 fn parse_kind(raw: Option<&str>) -> AttrType {
     match raw.map(|s| s.to_ascii_lowercase()) {
         Some(ref t) if t == "octets" || t == "bytes" => AttrType::Octets,

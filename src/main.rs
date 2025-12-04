@@ -386,3 +386,93 @@ fn log_auth_decision(
         ),
     );
 }
+
+#[cfg(test)]
+mod integration_tests {
+    use super::*;
+    use std::collections::HashMap;
+    use std::io;
+    use std::time::Duration;
+
+    #[test]
+    fn sends_mikrotik_reply_attributes() -> Result<()> {
+        let dictionary = Dictionary::builtin();
+        let users_path = {
+            let nanos = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let mut path = std::env::temp_dir();
+            path.push(format!("uradius-users-{nanos}.toml"));
+            let content = r#"
+[[user]]
+name = "mikrotik-user"
+password = "secret"
+[[user.reply]]
+type = "Mikrotik-Rate-Limit"
+value = "5M/10M"
+"#;
+            std::fs::write(&path, content)?;
+            path
+        };
+
+        let user_db = Arc::new(UserDb::load(&users_path, &dictionary)?);
+        let state = Arc::new(SharedState {
+            logger: Arc::new(Logger::new(None)?),
+            debug: false,
+            user_db,
+            nas_map: Arc::new(HashMap::new()),
+            dictionary: Arc::new(dictionary),
+        });
+
+        let server_socket = match UdpSocket::bind("127.0.0.1:0") {
+            Ok(sock) => sock,
+            Err(err) if err.kind() == io::ErrorKind::PermissionDenied => {
+                eprintln!("skipping Mikrotik reply test: {}", err);
+                return Ok(());
+            }
+            Err(err) => return Err(err.into()),
+        };
+        let client_socket = match UdpSocket::bind("127.0.0.1:0") {
+            Ok(sock) => sock,
+            Err(err) if err.kind() == io::ErrorKind::PermissionDenied => {
+                eprintln!("skipping Mikrotik reply test: {}", err);
+                return Ok(());
+            }
+            Err(err) => return Err(err.into()),
+        };
+        client_socket.set_read_timeout(Some(Duration::from_millis(500)))?;
+        let dest = client_socket.local_addr()?;
+
+        let mut request_bytes = vec![0u8; 20];
+        request_bytes[0] = RadiusCode::AccessRequest as u8;
+        request_bytes[1] = 42;
+        request_bytes[2..4].copy_from_slice(&(20u16).to_be_bytes());
+        let request = RadiusPacket::parse(&request_bytes)?;
+
+        send_reply_attributes(
+            &server_socket,
+            dest,
+            &request,
+            "testing123",
+            &state,
+            "mikrotik-user",
+        );
+
+        let mut buf = [0u8; 1024];
+        let (size, _) = client_socket.recv_from(&mut buf)?;
+        let response = RadiusPacket::parse(&buf[..size])?;
+
+        let vsa = response
+            .attributes
+            .iter()
+            .find(|a| a.typ == 26)
+            .expect("Vendor-Specific attribute present");
+        assert!(vsa.data.len() >= 7);
+        assert_eq!(u32::from_be_bytes([vsa.data[0], vsa.data[1], vsa.data[2], vsa.data[3]]), 14988);
+        assert_eq!(vsa.data[4], 8); // Mikrotik-Rate-Limit
+        assert_eq!(&vsa.data[6..], b"5M/10M");
+
+        Ok(())
+    }
+}
