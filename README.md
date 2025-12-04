@@ -39,6 +39,20 @@ password = "secret"
 [[user]]
 name = "bob"
 password = "pass123"
+
+# User with custom reply attributes
+[[user]]
+name = "charlie"
+password = "mypass"
+[[user.reply]]
+type = "Framed-IP-Address"
+value = "192.168.1.100"
+[[user.reply]]
+type = "Session-Timeout"
+value = "3600"
+[[user.reply]]
+type = "Filter-Id"
+value = "premium-user"
 ```
 
 ## Run
