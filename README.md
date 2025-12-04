@@ -53,6 +53,17 @@ value = "3600"
 [[user.reply]]
 type = "Filter-Id"
 value = "premium-user"
+
+# User with vendor-specific attributes (Mikrotik)
+[[user]]
+name = "mikrotik-user"
+password = "secret123"
+[[user.reply]]
+type = "Mikrotik-Rate-Limit"
+value = "10M/20M"
+[[user.reply]]
+type = "Mikrotik-Address-List"
+value = "allowed-users"
 ```
 
 ## Run
@@ -60,6 +71,10 @@ value = "premium-user"
 ```bash
 ./target/release/nanoRadius -c uradius.toml
 ```
+
+## Integration tests with radclient
+
+After building the release binary and installing `radclient` (package `freeradius-utils` on Debian/Ubuntu), run `scripts/radclient-tests.sh` to exercise PAP, CHAP, and accounting handling using the bundled CI config (`ci-uradius.toml`).
 
 ## Troubleshooting
 

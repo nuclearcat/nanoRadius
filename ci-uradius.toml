@@ -1,0 +1,12 @@
+[server]
+listen_auth = "127.0.0.1:4812"
+listen_acct = "127.0.0.1:4813"
+debug = true
+logfile = "ci-logs/uradius.log"
+userdb = ".github/testdata/users-ci.toml"
+
+[nas]
+[[nas.devices]]
+ip = "127.0.0.1"
+secret = "testing123"
+shortname = "ci-nas"

@@ -27,3 +27,26 @@
 51 = { name = "Acct-Link-Count", type = "integer" }
 60 = { name = "CHAP-Challenge", type = "octets" }
 80 = { name = "Message-Authenticator", type = "octets" }
+
+# Vendor definitions
+[vendors]
+
+[vendors.14988]
+name = "Mikrotik"
+[vendors.14988.attributes]
+1  = { name = "Mikrotik-Recv-Limit", type = "integer" }
+2  = { name = "Mikrotik-Xmit-Limit", type = "integer" }
+3  = { name = "Mikrotik-Group", type = "string" }
+8  = { name = "Mikrotik-Rate-Limit", type = "string" }
+9  = { name = "Mikrotik-Realm", type = "string" }
+10 = { name = "Mikrotik-Host-IP", type = "ipaddr" }
+11 = { name = "Mikrotik-Mark-Id", type = "string" }
+12 = { name = "Mikrotik-Advertise-URL", type = "string" }
+13 = { name = "Mikrotik-Advertise-Interval", type = "integer" }
+14 = { name = "Mikrotik-Recv-Limit-Gigawords", type = "integer" }
+15 = { name = "Mikrotik-Xmit-Limit-Gigawords", type = "integer" }
+17 = { name = "Mikrotik-Total-Limit", type = "integer" }
+18 = { name = "Mikrotik-Total-Limit-Gigawords", type = "integer" }
+19 = { name = "Mikrotik-Address-List", type = "string" }
+22 = { name = "Mikrotik-Delegated-IPv6-Pool", type = "string" }
+26 = { name = "Mikrotik-Wireless-VLANID", type = "integer" }
