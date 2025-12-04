@@ -1,0 +1,29 @@
+[attributes]
+1  = { name = "User-Name", type = "string" }
+2  = { name = "User-Password", type = "octets" }
+3  = { name = "CHAP-Password", type = "octets" }
+6  = { name = "Service-Type", type = "integer" }
+7  = { name = "Framed-Protocol", type = "integer" }
+8  = { name = "Framed-IP-Address", type = "ipaddr" }
+11 = { name = "Filter-Id", type = "string" }
+25 = { name = "Class", type = "octets" }
+26 = { name = "Vendor-Specific", type = "octets" }
+27 = { name = "Session-Timeout", type = "integer" }
+28 = { name = "Idle-Timeout", type = "integer" }
+30 = { name = "Called-Station-Id", type = "string" }
+31 = { name = "Calling-Station-Id", type = "string" }
+32 = { name = "NAS-Identifier", type = "string" }
+40 = { name = "Acct-Status-Type", type = "integer", enums = { 1 = "Start", 2 = "Stop", 3 = "Interim-Update", 4 = "On", 5 = "Off" } }
+41 = { name = "Acct-Delay-Time", type = "integer" }
+42 = { name = "Acct-Input-Octets", type = "integer" }
+43 = { name = "Acct-Output-Octets", type = "integer" }
+44 = { name = "Acct-Session-Id", type = "string" }
+45 = { name = "Acct-Authentic", type = "integer" }
+46 = { name = "Acct-Session-Time", type = "integer" }
+47 = { name = "Acct-Input-Packets", type = "integer" }
+48 = { name = "Acct-Output-Packets", type = "integer" }
+49 = { name = "Acct-Terminate-Cause", type = "integer", enums = { 1 = "User-Request", 2 = "Lost-Carrier", 3 = "Lost-Service", 4 = "Idle-Timeout", 5 = "Session-Timeout", 6 = "Admin-Reset", 7 = "Admin-Reboot", 8 = "Port-Error", 9 = "NAS-Error", 10 = "NAS-Request", 11 = "NAS-Reboot", 12 = "Port-Unneeded", 13 = "Port-Preempted", 14 = "Port-Suspended", 15 = "Service-Unavailable", 16 = "Callback", 17 = "User-Error", 18 = "Host-Request" } }
+50 = { name = "Acct-Multi-Session-Id", type = "string" }
+51 = { name = "Acct-Link-Count", type = "integer" }
+60 = { name = "CHAP-Challenge", type = "octets" }
+80 = { name = "Message-Authenticator", type = "octets" }

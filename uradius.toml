@@ -1,0 +1,17 @@
+[server]
+listen_auth = "0.0.0.0:1812"
+listen_acct = "0.0.0.0:1813"
+debug = true
+logfile = "uradius.log"
+userdb = "users"
+
+[nas]
+[[nas.devices]]
+ip = "127.0.0.1"
+secret = "testing123"
+shortname = "localnas"
+
+[[nas.devices]]
+ip = "10.255.255.254"
+secret = "secret123"
+shortname = "localnas"

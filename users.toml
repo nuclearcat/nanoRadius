@@ -1,0 +1,21 @@
+[[user]]
+name = "alice"
+password = "secret"
+
+[[user]]
+name = "bob"
+password = "pass123"
+
+# Example with reply attributes
+#[[user]]
+#name = "zrarieh-jadzorkot"
+#password = "changeme"
+#[[user.reply]]
+#type = "Filter-Id"
+#value = "16384/51200"
+#[[user.reply]]
+#type = "Login-LAT-Node"
+#value = "speed:8192/61440/4096/6144/6144/8192"
+#[[user.reply]]
+#type = "Acct-Session-Id"
+#value = "ac4c467e6f59eb99"
