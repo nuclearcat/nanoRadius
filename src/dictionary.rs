@@ -3,6 +3,7 @@
 
 use std::collections::HashMap;
 use std::fs;
+use std::io;
 use std::path::Path;
 
 use serde::Deserialize;
@@ -71,7 +72,12 @@ pub enum AttrType {
 
 impl Dictionary {
     pub fn load_from_file(path: &Path) -> Result<Self> {
-        let contents = fs::read_to_string(path)?;
+        let contents = fs::read_to_string(path).map_err(|e| {
+            io::Error::new(
+                e.kind(),
+                format!("failed to read dictionary {}: {}", path.display(), e),
+            )
+        })?;
         let raw: RawDictionary = toml::from_str(&contents)?;
         Ok(Self::from_raw(raw))
     }

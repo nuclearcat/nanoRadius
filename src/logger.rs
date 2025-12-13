@@ -3,6 +3,7 @@
 
 use chrono::Local;
 use std::fs::{self, File, OpenOptions};
+use std::io;
 use std::io::Write;
 use std::path::Path;
 use std::sync::Mutex;
@@ -19,9 +20,27 @@ impl Logger {
             if let Some(parent) = path.parent()
                 && !parent.as_os_str().is_empty()
             {
-                fs::create_dir_all(parent)?;
+                fs::create_dir_all(parent).map_err(|e| {
+                    io::Error::new(
+                        e.kind(),
+                        format!(
+                            "failed to create log directory {}: {}",
+                            parent.display(),
+                            e
+                        ),
+                    )
+                })?;
             }
-            let file = OpenOptions::new().create(true).append(true).open(path)?;
+            let file = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path)
+                .map_err(|e| {
+                    io::Error::new(
+                        e.kind(),
+                        format!("failed to open log file {}: {}", path.display(), e),
+                    )
+                })?;
             Ok(Self {
                 file: Some(Mutex::new(file)),
             })

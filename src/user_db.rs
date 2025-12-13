@@ -3,6 +3,7 @@
 
 use std::collections::HashMap;
 use std::fs;
+use std::io;
 use std::path::Path;
 
 use crate::Result;
@@ -23,7 +24,12 @@ pub struct UserDb {
 
 impl UserDb {
     pub fn load(path: &Path, dictionary: &Dictionary) -> Result<Self> {
-        let raw = fs::read_to_string(path)?;
+        let raw = fs::read_to_string(path).map_err(|e| {
+            io::Error::new(
+                e.kind(),
+                format!("failed to read user database {}: {}", path.display(), e),
+            )
+        })?;
         let parsed: RawUsers = toml::from_str(&raw)?;
         let mut users = HashMap::new();
         for entry in parsed.user {
