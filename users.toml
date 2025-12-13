@@ -6,6 +6,11 @@ password = "secret"
 name = "bob"
 password = "pass123"
 
+[[user]]
+name = "user@example.com"
+password = "pass123"
+
+
 # Example with reply attributes
 #[[user]]
 #name = "zrarieh-jadzorkot"

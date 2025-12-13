@@ -3,7 +3,7 @@ listen_auth = "0.0.0.0:1812"
 listen_acct = "0.0.0.0:1813"
 debug = true
 logfile = "uradius.log"
-userdb = "users"
+userdb = "users.toml"
 
 [nas]
 [[nas.devices]]

@@ -25,6 +25,8 @@
 49 = { name = "Acct-Terminate-Cause", type = "integer", enums = { 1 = "User-Request", 2 = "Lost-Carrier", 3 = "Lost-Service", 4 = "Idle-Timeout", 5 = "Session-Timeout", 6 = "Admin-Reset", 7 = "Admin-Reboot", 8 = "Port-Error", 9 = "NAS-Error", 10 = "NAS-Request", 11 = "NAS-Reboot", 12 = "Port-Unneeded", 13 = "Port-Preempted", 14 = "Port-Suspended", 15 = "Service-Unavailable", 16 = "Callback", 17 = "User-Error", 18 = "Host-Request" } }
 50 = { name = "Acct-Multi-Session-Id", type = "string" }
 51 = { name = "Acct-Link-Count", type = "integer" }
+52 = { name = "Acct-Input-Gigawords", type = "integer" }
+53 = { name = "Acct-Output-Gigawords", type = "integer" }
 60 = { name = "CHAP-Challenge", type = "octets" }
 80 = { name = "Message-Authenticator", type = "octets" }
 

@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::io;
+use std::net::Ipv4Addr;
 use std::path::Path;
 
 use serde::Deserialize;
@@ -109,33 +110,127 @@ impl Dictionary {
     }
 
     pub fn describe_attributes(&self, attributes: &[RadiusAttribute]) -> String {
+        let mut int_values: HashMap<u8, u32> = HashMap::new();
+        for attr in attributes {
+            let Some(meta) = self.attrs.get(&attr.typ) else {
+                continue;
+            };
+            if !matches!(meta.kind, AttrType::Integer) {
+                continue;
+            }
+            if let Some(v) = parse_integer(&attr.data) {
+                int_values.insert(attr.typ, v);
+                continue;
+            }
+            if let Ok(text) = std::str::from_utf8(&attr.data)
+                && let Ok(v) = text.trim().parse::<u32>()
+            {
+                int_values.insert(attr.typ, v);
+            }
+        }
+
+        let has_acct_input_octets = attributes.iter().any(|a| a.typ == 42);
+        let has_acct_output_octets = attributes.iter().any(|a| a.typ == 43);
+
         attributes
             .iter()
-            .map(|attr| {
+            .filter_map(|attr| {
+                // Hide gigawords when we can render the combined 64-bit total.
+                if (attr.typ == 52 && has_acct_input_octets)
+                    || (attr.typ == 53 && has_acct_output_octets)
+                {
+                    return None;
+                }
+
                 // Handle Vendor-Specific attributes (type 26)
                 if attr.typ == 26 && attr.data.len() >= 6 {
-                    return self.describe_vsa(&attr.data);
+                    return Some(self.describe_vsa(&attr.data));
                 }
-                let name = self.attrs.get(&attr.typ).map(|m| m.name.as_str());
-                if let Some(meta) = self.attrs.get(&attr.typ)
-                    && let Some(value) =
-                        parse_integer(&attr.data).and_then(|v| meta.enums.get(&v).map(|l| (v, l)))
-                {
-                    return format!("{}={} ({})", meta.name, value.1, value.0);
-                }
-                match (name, String::from_utf8(attr.data.clone())) {
-                    (Some(name), Ok(text)) => format!("{}='{}'", name, text),
-                    (Some(name), Err(_)) => {
-                        format!("{} len {} ({:02x?})", name, attr.data.len(), attr.data)
+
+                if let Some(meta) = self.attrs.get(&attr.typ) {
+                    match meta.kind {
+                        AttrType::Integer => {
+                            if let Some(value) = int_values.get(&attr.typ).copied() {
+                                if let Some(label) = meta.enums.get(&value) {
+                                    return Some(format!("{}={} ({})", meta.name, label, value));
+                                }
+                                match attr.typ {
+                                    42 => {
+                                        // Acct-Input-Octets + Acct-Input-Gigawords
+                                        let gw = int_values.get(&52).copied().unwrap_or(0) as u64;
+                                        let total = (gw << 32) + value as u64;
+                                        return Some(format!(
+                                            "{}={} ({})",
+                                            meta.name,
+                                            total,
+                                            format_human_bytes(total)
+                                        ));
+                                    }
+                                    43 => {
+                                        // Acct-Output-Octets + Acct-Output-Gigawords
+                                        let gw = int_values.get(&53).copied().unwrap_or(0) as u64;
+                                        let total = (gw << 32) + value as u64;
+                                        return Some(format!(
+                                            "{}={} ({})",
+                                            meta.name,
+                                            total,
+                                            format_human_bytes(total)
+                                        ));
+                                    }
+                                    _ => {
+                                        return Some(format!("{}={}", meta.name, value));
+                                    }
+                                }
+                            }
+
+                            return Some(format!(
+                                "{} len {} ({:02x?})",
+                                meta.name,
+                                attr.data.len(),
+                                attr.data
+                            ));
+                        }
+                        AttrType::IpAddr => {
+                            if attr.data.len() == 4 {
+                                let ip = Ipv4Addr::new(
+                                    attr.data[0],
+                                    attr.data[1],
+                                    attr.data[2],
+                                    attr.data[3],
+                                );
+                                return Some(format!("{}={}", meta.name, ip));
+                            }
+
+                            return Some(format!(
+                                "{} len {} ({:02x?})",
+                                meta.name,
+                                attr.data.len(),
+                                attr.data
+                            ));
+                        }
+                        AttrType::String | AttrType::Octets => {
+                            return Some(match String::from_utf8(attr.data.clone()) {
+                                Ok(text) => format!("{}='{}'", meta.name, text),
+                                Err(_) => format!(
+                                    "{} len {} ({:02x?})",
+                                    meta.name,
+                                    attr.data.len(),
+                                    attr.data
+                                ),
+                            });
+                        }
                     }
-                    (None, Ok(text)) => format!("type {}='{}'", attr.typ, text),
-                    (None, Err(_)) => format!(
+                }
+
+                Some(match String::from_utf8(attr.data.clone()) {
+                    Ok(text) => format!("type {}='{}'", attr.typ, text),
+                    Err(_) => format!(
                         "type {} len {} ({:02x?})",
                         attr.typ,
                         attr.data.len(),
                         attr.data
                     ),
-                }
+                })
             })
             .collect::<Vec<_>>()
             .join(", ")
@@ -248,6 +343,30 @@ fn parse_integer(value: &[u8]) -> Option<u32> {
     }
 }
 
+fn format_human_bytes(bytes: u64) -> String {
+    if bytes < 1024 {
+        return format!("{bytes} B");
+    }
+
+    let mut value = bytes as f64;
+    let mut unit = "B";
+    for next in ["KiB", "MiB", "GiB", "TiB", "PiB", "EiB"] {
+        value /= 1024.0;
+        unit = next;
+        if value < 1024.0 {
+            break;
+        }
+    }
+
+    if value < 10.0 {
+        format!("{value:.2} {unit}")
+    } else if value < 100.0 {
+        format!("{value:.1} {unit}")
+    } else {
+        format!("{value:.0} {unit}")
+    }
+}
+
 fn parse_kind(raw: Option<&str>) -> AttrType {
     match raw.map(|s| s.to_ascii_lowercase()) {
         Some(ref t) if t == "octets" || t == "bytes" => AttrType::Octets,
@@ -276,5 +395,33 @@ mod tests {
         };
         let desc = dict.describe_attributes(&[vsa]);
         assert_eq!(desc, "Mikrotik-Rate-Limit='5M/10M'");
+    }
+
+    #[test]
+    fn describes_acct_octets_with_gigawords_as_u64() {
+        let dict = Dictionary::builtin();
+        let attrs = [
+            RadiusAttribute {
+                typ: 52,
+                data: vec![0x00, 0x00, 0x00, 0x01],
+            },
+            RadiusAttribute {
+                typ: 42,
+                data: vec![0x00, 0x00, 0x00, 0x00],
+            },
+        ];
+        let desc = dict.describe_attributes(&attrs);
+        assert_eq!(desc, "Acct-Input-Octets=4294967296 (4.00 GiB)");
+    }
+
+    #[test]
+    fn describes_acct_octets_without_gigawords() {
+        let dict = Dictionary::builtin();
+        let attrs = [RadiusAttribute {
+            typ: 43,
+            data: vec![0x00, 0x00, 0x00, 0xC6],
+        }];
+        let desc = dict.describe_attributes(&attrs);
+        assert_eq!(desc, "Acct-Output-Octets=198 (198 B)");
     }
 }
