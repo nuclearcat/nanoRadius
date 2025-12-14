@@ -210,8 +210,16 @@ impl Dictionary {
                         }
                         AttrType::String | AttrType::Octets => {
                             return Some(match String::from_utf8(attr.data.clone()) {
-                                Ok(text) => format!("{}='{}'", meta.name, text),
+                                Ok(text) if is_safe_printable(&text) => {
+                                    format!("{}='{}'", meta.name, text)
+                                }
                                 Err(_) => format!(
+                                    "{} len {} ({:02x?})",
+                                    meta.name,
+                                    attr.data.len(),
+                                    attr.data
+                                ),
+                                Ok(_) => format!(
                                     "{} len {} ({:02x?})",
                                     meta.name,
                                     attr.data.len(),
@@ -223,8 +231,14 @@ impl Dictionary {
                 }
 
                 Some(match String::from_utf8(attr.data.clone()) {
-                    Ok(text) => format!("type {}='{}'", attr.typ, text),
+                    Ok(text) if is_safe_printable(&text) => format!("type {}='{}'", attr.typ, text),
                     Err(_) => format!(
+                        "type {} len {} ({:02x?})",
+                        attr.typ,
+                        attr.data.len(),
+                        attr.data
+                    ),
+                    Ok(_) => format!(
                         "type {} len {} ({:02x?})",
                         attr.typ,
                         attr.data.len(),
@@ -251,21 +265,32 @@ impl Dictionary {
         if let Some(vendor) = self.vendors.get(&vendor_id) {
             if let Some(attr_meta) = vendor.attrs.get(&vendor_type) {
                 match String::from_utf8(value.to_vec()) {
-                    Ok(text) => return format!("{}='{}'", attr_meta.name, text),
+                    Ok(text) if is_safe_printable(&text) => {
+                        return format!("{}='{}'", attr_meta.name, text);
+                    }
                     Err(_) => return format!("{} ({:02x?})", attr_meta.name, value),
+                    Ok(_) => return format!("{} ({:02x?})", attr_meta.name, value),
                 }
             }
             match String::from_utf8(value.to_vec()) {
-                Ok(text) => return format!("{}-Unknown-{}='{}'", vendor.name, vendor_type, text),
+                Ok(text) if is_safe_printable(&text) => {
+                    return format!("{}-Unknown-{}='{}'", vendor.name, vendor_type, text);
+                }
                 Err(_) => {
+                    return format!("{}-Unknown-{} ({:02x?})", vendor.name, vendor_type, value);
+                }
+                Ok(_) => {
                     return format!("{}-Unknown-{} ({:02x?})", vendor.name, vendor_type, value);
                 }
             }
         }
 
         match String::from_utf8(value.to_vec()) {
-            Ok(text) => format!("Vendor-{}-Attr-{}='{}'", vendor_id, vendor_type, text),
+            Ok(text) if is_safe_printable(&text) => {
+                format!("Vendor-{}-Attr-{}='{}'", vendor_id, vendor_type, text)
+            }
             Err(_) => format!("Vendor-{}-Attr-{} ({:02x?})", vendor_id, vendor_type, value),
+            Ok(_) => format!("Vendor-{}-Attr-{} ({:02x?})", vendor_id, vendor_type, value),
         }
     }
 
@@ -341,6 +366,10 @@ fn parse_integer(value: &[u8]) -> Option<u32> {
     } else {
         None
     }
+}
+
+fn is_safe_printable(s: &str) -> bool {
+    s.chars().all(|c| !c.is_control())
 }
 
 fn format_human_bytes(bytes: u64) -> String {
@@ -423,5 +452,33 @@ mod tests {
         }];
         let desc = dict.describe_attributes(&attrs);
         assert_eq!(desc, "Acct-Output-Octets=198 (198 B)");
+    }
+
+    #[test]
+    fn describes_nas_port_type_and_port_id() {
+        let dict = Dictionary::builtin();
+        let attrs = [
+            RadiusAttribute {
+                typ: 61,
+                data: vec![0x00, 0x00, 0x00, 0x05],
+            },
+            RadiusAttribute {
+                typ: 87,
+                data: b"ppp0".to_vec(),
+            },
+        ];
+        let desc = dict.describe_attributes(&attrs);
+        assert_eq!(desc, "NAS-Port-Type=Virtual (5), NAS-Port-Id='ppp0'");
+    }
+
+    #[test]
+    fn describes_nas_ip_address() {
+        let dict = Dictionary::builtin();
+        let attrs = [RadiusAttribute {
+            typ: 4,
+            data: vec![10, 255, 255, 254],
+        }];
+        let desc = dict.describe_attributes(&attrs);
+        assert_eq!(desc, "NAS-IP-Address=10.255.255.254");
     }
 }
