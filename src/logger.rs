@@ -23,11 +23,7 @@ impl Logger {
                 fs::create_dir_all(parent).map_err(|e| {
                     io::Error::new(
                         e.kind(),
-                        format!(
-                            "failed to create log directory {}: {}",
-                            parent.display(),
-                            e
-                        ),
+                        format!("failed to create log directory {}: {}", parent.display(), e),
                     )
                 })?;
             }
