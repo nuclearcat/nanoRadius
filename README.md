@@ -72,6 +72,17 @@ value = "allowed-users"
 ./target/release/nanoRadius -c nanoradius.toml
 ```
 
+## Docker
+
+Image is published to `ghcr.io/nuclearcat/nanoradius`.
+
+Default config path: `/etc/nanoradius/nanoradius.toml`  
+Default log path: `/var/log/nanoradius/nanoradius.log`
+
+```bash
+docker run --rm -p 1812:1812/udp -p 1813:1813/udp ghcr.io/nuclearcat/nanoradius
+```
+
 ## Integration tests with radclient
 
 After building the release binary and installing `radclient` (package `freeradius-utils` on Debian/Ubuntu), run `scripts/radclient-tests.sh` to exercise PAP, CHAP, and accounting handling using the bundled CI config (`ci-nanoradius.toml`).

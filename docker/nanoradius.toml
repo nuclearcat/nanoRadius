@@ -1,0 +1,12 @@
+[server]
+listen_auth = "0.0.0.0:1812"
+listen_acct = "0.0.0.0:1813"
+debug = true
+logfile = "/var/log/nanoradius/nanoradius.log"
+userdb = "/etc/nanoradius/users.toml"
+
+[nas]
+[[nas.devices]]
+ip = "127.0.0.1"
+secret = "testing123"
+shortname = "localnas"
