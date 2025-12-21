@@ -187,7 +187,7 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        path.push(format!("uradius-userdb-{nonce}.toml"));
+        path.push(format!("nanoradius-userdb-{nonce}.toml"));
         fs::write(&path, contents).expect("write temp db");
         path
     }

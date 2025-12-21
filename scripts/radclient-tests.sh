@@ -6,8 +6,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN="${ROOT_DIR}/target/release/nanoRadius"
-CONFIG="${ROOT_DIR}/ci-uradius.toml"
-LOG_FILE="${ROOT_DIR}/ci-logs/uradius.log"
+CONFIG="${ROOT_DIR}/ci-nanoradius.toml"
+LOG_FILE="${ROOT_DIR}/ci-logs/nanoradius.log"
 SERVER_LOG="${ROOT_DIR}/ci-logs/server.log"
 AUTH_PORT=4812
 ACCT_PORT=4813

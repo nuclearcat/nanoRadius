@@ -12,14 +12,14 @@ Binary will be at `./target/release/nanoRadius`
 
 ## Configuration
 
-Create `uradius.toml`:
+Create `nanoradius.toml`:
 
 ```toml
 [server]
 listen_auth = "0.0.0.0:1812"
 listen_acct = "0.0.0.0:1813"
 debug = true
-logfile = "uradius.log"
+logfile = "nanoradius.log"
 userdb = "users"
 
 [nas]
@@ -69,12 +69,12 @@ value = "allowed-users"
 ## Run
 
 ```bash
-./target/release/nanoRadius -c uradius.toml
+./target/release/nanoRadius -c nanoradius.toml
 ```
 
 ## Integration tests with radclient
 
-After building the release binary and installing `radclient` (package `freeradius-utils` on Debian/Ubuntu), run `scripts/radclient-tests.sh` to exercise PAP, CHAP, and accounting handling using the bundled CI config (`ci-uradius.toml`).
+After building the release binary and installing `radclient` (package `freeradius-utils` on Debian/Ubuntu), run `scripts/radclient-tests.sh` to exercise PAP, CHAP, and accounting handling using the bundled CI config (`ci-nanoradius.toml`).
 
 ## Troubleshooting
 

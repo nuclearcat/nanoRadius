@@ -75,7 +75,7 @@ mod tests {
             .unwrap()
             .as_nanos();
         let mut path = std::env::temp_dir();
-        path.push(format!("uradius-log-{}.log", nanos));
+        path.push(format!("nanoradius-log-{}.log", nanos));
         path
     }
 

@@ -34,8 +34,8 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>
 #[derive(Parser)]
 #[command(author, version, about = "Lightweight RADIUS server")]
 struct Cli {
-    /// Path to the configuration file (uradius.toml)
-    #[arg(short = 'c', long = "config", default_value = "uradius.toml")]
+    /// Path to the configuration file (nanoradius.toml)
+    #[arg(short = 'c', long = "config", default_value = "nanoradius.toml")]
     config: PathBuf,
 }
 
@@ -407,7 +407,7 @@ mod integration_tests {
                 .unwrap()
                 .as_nanos();
             let mut path = std::env::temp_dir();
-            path.push(format!("uradius-users-{nanos}.toml"));
+            path.push(format!("nanoradius-users-{nanos}.toml"));
             let content = r#"
 [[user]]
 name = "mikrotik-user"
