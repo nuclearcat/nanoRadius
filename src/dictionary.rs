@@ -99,11 +99,12 @@ impl Dictionary {
 
     pub fn lookup_vendor_attr(&self, name: &str) -> Option<(u32, u8, &VendorAttributeMeta)> {
         // Look for "Vendor-Attr" format (e.g., "Mikrotik-Rate-Limit")
+        let name_key = name.to_ascii_lowercase();
         for (vendor_id, vendor) in &self.vendors {
-            if let Some(code) = vendor.names.get(&name.to_ascii_lowercase())
-                && let Some(meta) = vendor.attrs.get(code)
-            {
-                return Some((*vendor_id, *code, meta));
+            if let Some(code) = vendor.names.get(&name_key) {
+                if let Some(meta) = vendor.attrs.get(code) {
+                    return Some((*vendor_id, *code, meta));
+                }
             }
         }
         None
@@ -122,10 +123,10 @@ impl Dictionary {
                 int_values.insert(attr.typ, v);
                 continue;
             }
-            if let Ok(text) = std::str::from_utf8(&attr.data)
-                && let Ok(v) = text.trim().parse::<u32>()
-            {
-                int_values.insert(attr.typ, v);
+            if let Ok(text) = std::str::from_utf8(&attr.data) {
+                if let Ok(v) = text.trim().parse::<u32>() {
+                    int_values.insert(attr.typ, v);
+                }
             }
         }
 

@@ -17,15 +17,15 @@ pub struct Logger {
 impl Logger {
     pub fn new(path: Option<&Path>) -> Result<Self> {
         if let Some(path) = path {
-            if let Some(parent) = path.parent()
-                && !parent.as_os_str().is_empty()
-            {
-                fs::create_dir_all(parent).map_err(|e| {
-                    io::Error::new(
-                        e.kind(),
-                        format!("failed to create log directory {}: {}", parent.display(), e),
-                    )
-                })?;
+            if let Some(parent) = path.parent() {
+                if !parent.as_os_str().is_empty() {
+                    fs::create_dir_all(parent).map_err(|e| {
+                        io::Error::new(
+                            e.kind(),
+                            format!("failed to create log directory {}: {}", parent.display(), e),
+                        )
+                    })?;
+                }
             }
             let file = OpenOptions::new()
                 .create(true)
@@ -49,10 +49,10 @@ impl Logger {
         let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S");
         let line = format!("[{} {}] {}", timestamp, level, msg);
         println!("{}", line);
-        if let Some(file) = &self.file
-            && let Ok(mut file) = file.lock()
-        {
-            let _ = writeln!(file, "{}", line);
+        if let Some(file) = &self.file {
+            if let Ok(mut file) = file.lock() {
+                let _ = writeln!(file, "{}", line);
+            }
         }
     }
 

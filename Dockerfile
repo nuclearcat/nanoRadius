@@ -1,11 +1,12 @@
-FROM rust:1.85-bookworm AS builder
+FROM rust:1.85-trixie AS builder
 
 WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
+COPY dictionary.toml ./
 COPY src ./src
 RUN cargo build --release
 
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
 RUN useradd -r -u 10001 -g root -d /nonexistent -s /usr/sbin/nologin nanoradius
 
