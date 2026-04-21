@@ -25,7 +25,7 @@ use logger::Logger;
 use pap_auth::{
     decrypt_user_password, extract_pap_password, format_password_debug, trim_trailing_zeros,
 };
-use radius::{RadiusCode, RadiusPacket};
+use radius::{RadiusAttribute, RadiusCode, RadiusPacket};
 use server::{run_accounting_server, run_auth_server};
 use user_db::{UserDb, verify_credentials};
 
@@ -251,6 +251,7 @@ pub(crate) fn handle_auth_packet(
                 socket,
                 src,
                 state,
+                &[],
             );
             return;
         }
@@ -272,7 +273,6 @@ pub(crate) fn handle_auth_packet(
                 if verify_credentials(&username, trimmed, &state.user_db)
                     || verify_credentials(&username, password_bytes.as_ref(), &state.user_db)
                 {
-                    send_reply_attributes(socket, src, &packet, &nas.secret, state, &username);
                     true
                 } else {
                     reason = "invalid username/password".into();
@@ -310,12 +310,29 @@ pub(crate) fn handle_auth_packet(
     };
 
     log_auth_decision(state, &nas, src, &username, auth_result, &reason);
+    let reply_attrs: &[RadiusAttribute] = if auth_result {
+        state
+            .user_db
+            .get(&username)
+            .map(|u| u.reply.as_slice())
+            .unwrap_or(&[])
+    } else {
+        &[]
+    };
     let response_code = if auth_result {
         RadiusCode::AccessAccept
     } else {
         RadiusCode::AccessReject
     };
-    send_access_response(response_code, &packet, &nas.secret, socket, src, state);
+    send_access_response(
+        response_code,
+        &packet,
+        &nas.secret,
+        socket,
+        src,
+        state,
+        reply_attrs,
+    );
 }
 
 fn send_access_response(
@@ -325,8 +342,9 @@ fn send_access_response(
     socket: &UdpSocket,
     dest: SocketAddr,
     state: &Arc<SharedState>,
+    attributes: &[RadiusAttribute],
 ) {
-    match RadiusPacket::build_response(code, request, secret, &[]) {
+    match RadiusPacket::build_response(code, request, secret, attributes) {
         Ok(response) => {
             if let Err(err) = socket.send_to(&response, dest) {
                 state
@@ -337,33 +355,6 @@ fn send_access_response(
         Err(err) => state
             .logger
             .log("ERROR", &format!("Failed to build auth response: {err}")),
-    }
-}
-
-fn send_reply_attributes(
-    socket: &UdpSocket,
-    dest: SocketAddr,
-    request: &RadiusPacket,
-    secret: &str,
-    state: &Arc<SharedState>,
-    username: &str,
-) {
-    if let Some(user) = state.user_db.get(username) {
-        if user.reply.is_empty() {
-            return;
-        }
-        match RadiusPacket::build_response(RadiusCode::AccessAccept, request, secret, &user.reply) {
-            Ok(response) => {
-                if let Err(err) = socket.send_to(&response, dest) {
-                    state
-                        .logger
-                        .log("ERROR", &format!("Failed to send reply attrs: {err}"));
-                }
-            }
-            Err(err) => state
-                .logger
-                .log("ERROR", &format!("Failed to build reply attrs: {err}")),
-        }
     }
 }
 
@@ -454,13 +445,15 @@ value = "5M/10M"
         request_bytes[2..4].copy_from_slice(&(20u16).to_be_bytes());
         let request = RadiusPacket::parse(&request_bytes)?;
 
-        send_reply_attributes(
-            &server_socket,
-            dest,
+        let user = state.user_db.get("mikrotik-user").expect("user present");
+        send_access_response(
+            RadiusCode::AccessAccept,
             &request,
             "testing123",
+            &server_socket,
+            dest,
             &state,
-            "mikrotik-user",
+            &user.reply,
         );
 
         let mut buf = [0u8; 1024];
