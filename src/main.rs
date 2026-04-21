@@ -22,9 +22,7 @@ mod user_db;
 use chap_auth::verify_chap_password;
 use dictionary::Dictionary;
 use logger::Logger;
-use pap_auth::{
-    decrypt_user_password, extract_pap_password, format_password_debug, trim_trailing_zeros,
-};
+use pap_auth::{decrypt_user_password, format_password_debug, trim_trailing_zeros};
 use radius::{RadiusAttribute, RadiusCode, RadiusPacket};
 use server::{run_accounting_server, run_auth_server};
 use user_db::{UserDb, verify_credentials};
@@ -259,8 +257,7 @@ pub(crate) fn handle_auth_packet(
     let auth_result = if let Some(encrypted) = packet.attribute_value(2) {
         match decrypt_user_password(encrypted, &nas.secret, &packet.authenticator) {
             Ok(password) => {
-                let password_bytes = extract_pap_password(&username, &password);
-                let trimmed = trim_trailing_zeros(password_bytes.as_ref());
+                let trimmed = trim_trailing_zeros(&password);
                 if state.debug {
                     let preview = format_password_debug(trimmed);
                     state.logger.debug(
@@ -268,9 +265,7 @@ pub(crate) fn handle_auth_packet(
                         &format!("PAP password for {} = {}", username, preview),
                     );
                 }
-                if verify_credentials(&username, trimmed, &state.user_db)
-                    || verify_credentials(&username, password_bytes.as_ref(), &state.user_db)
-                {
+                if verify_credentials(&username, trimmed, &state.user_db) {
                     true
                 } else {
                     reason = "invalid username/password".into();

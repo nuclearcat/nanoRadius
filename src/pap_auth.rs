@@ -1,7 +1,6 @@
 // Copyright (c) 2025 Denys Fedoryshchenko <denys.f@collabora.com>
 // SPDX-License-Identifier: Apache-2.0
 
-use std::borrow::Cow;
 use std::fmt::Write as _;
 
 use md5::{Digest, Md5};
@@ -34,27 +33,6 @@ pub fn decrypt_user_password(
         result.extend_from_slice(&plain_block);
     }
     Ok(result)
-}
-
-pub fn extract_pap_password<'a>(username: &str, decrypted: &'a [u8]) -> Cow<'a, [u8]> {
-    if decrypted.len() >= 2 {
-        let user_len = decrypted[0] as usize;
-        if user_len == username.len() {
-            let user_end = 1 + user_len;
-            if decrypted.len() > user_end {
-                let user_slice = &decrypted[1..user_end];
-                if user_slice == username.as_bytes() {
-                    let pass_len = decrypted[user_end] as usize;
-                    let pass_start = user_end + 1;
-                    let pass_end = pass_start + pass_len;
-                    if decrypted.len() >= pass_end {
-                        return Cow::Borrowed(&decrypted[pass_start..pass_end]);
-                    }
-                }
-            }
-        }
-    }
-    Cow::Borrowed(decrypted)
 }
 
 pub fn format_password_debug(password: &[u8]) -> String {
@@ -129,27 +107,6 @@ mod tests {
         let decrypted = decrypt_user_password(&encrypted, secret, &auth).unwrap();
         assert!(decrypted.starts_with(&raw));
         assert_eq!(decrypted.len(), 16);
-    }
-
-    #[test]
-    fn extracts_plain_pap_password() {
-        let username = "alice";
-        let payload = b"secret".to_vec();
-        let extracted = extract_pap_password(username, &payload);
-        assert_eq!(extracted.as_ref(), b"secret");
-    }
-
-    #[test]
-    fn extracts_length_prefixed_password() {
-        let username = "user@example.com";
-        let password = b"pass1234";
-        let mut payload = Vec::new();
-        payload.push(username.len() as u8);
-        payload.extend_from_slice(username.as_bytes());
-        payload.push(password.len() as u8);
-        payload.extend_from_slice(password);
-        let extracted = extract_pap_password(username, &payload);
-        assert_eq!(extracted.as_ref(), password);
     }
 
     #[test]
