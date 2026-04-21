@@ -1,8 +1,8 @@
+// Copyright (c) 2025 Denys Fedoryshchenko <denys.f@collabora.com>
+// SPDX-License-Identifier: Apache-2.0
+
 use std::borrow::Cow;
 use std::fmt::Write as _;
-
-// Copyright (c) 2025 Denys Fedoryshchenko <denys.f@collabora.com>
-// SPDX-License-Identifier: GPL-3.0-or-later OR LicenseRef-Proprietary
 
 use md5::{Digest, Md5};
 

@@ -1,5 +1,5 @@
 // Copyright (c) 2025 Denys Fedoryshchenko <denys.f@collabora.com>
-// SPDX-License-Identifier: GPL-3.0-or-later OR LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 use std::net::UdpSocket;
 use std::sync::Arc;
