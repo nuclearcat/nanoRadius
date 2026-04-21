@@ -10,7 +10,7 @@ use md5::{Digest, Md5};
 use crate::Dictionary;
 use crate::NasDevice;
 use crate::logger::Logger;
-use crate::radius::{RadiusCode, RadiusPacket};
+use crate::radius::{RadiusCode, RadiusPacket, constant_time_eq};
 
 pub fn handle_accounting_packet(
     data: &[u8],
@@ -110,7 +110,7 @@ pub fn verify_accounting_authenticator(data: &[u8], packet: &RadiusPacket, secre
     ctx.update(&data[20..packet.length as usize]);
     ctx.update(secret.as_bytes());
     let digest = ctx.finalize();
-    digest.as_slice() == packet.authenticator
+    constant_time_eq(digest.as_slice(), &packet.authenticator)
 }
 
 fn parse_u32(value: &[u8]) -> Option<u32> {

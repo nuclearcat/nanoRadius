@@ -3,6 +3,7 @@
 
 use md5::{Digest, Md5};
 
+use crate::radius::constant_time_eq;
 use crate::user_db::UserDb;
 
 pub fn verify_chap_password(
@@ -11,7 +12,7 @@ pub fn verify_chap_password(
     challenge: &[u8],
     db: &UserDb,
 ) -> bool {
-    if chap_payload.len() < 17 {
+    if chap_payload.len() != 17 {
         return false;
     }
     let chap_id = chap_payload[0];
@@ -24,7 +25,7 @@ pub fn verify_chap_password(
     ctx.update(clear.as_bytes());
     ctx.update(challenge);
     let digest = ctx.finalize();
-    digest.as_slice() == response
+    constant_time_eq(digest.as_slice(), response)
 }
 
 #[cfg(test)]

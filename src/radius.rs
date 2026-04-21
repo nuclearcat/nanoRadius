@@ -180,7 +180,7 @@ fn hmac_md5(key: &[u8], data: &[u8]) -> [u8; 16] {
     out
 }
 
-fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+pub fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() {
         return false;
     }

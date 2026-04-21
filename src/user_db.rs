@@ -8,7 +8,7 @@ use std::path::Path;
 
 use crate::Result;
 use crate::dictionary::Dictionary;
-use crate::radius::RadiusAttribute;
+use crate::radius::{RadiusAttribute, constant_time_eq};
 use serde::Deserialize;
 
 pub struct User {
@@ -89,8 +89,12 @@ pub fn verify_pap_credentials(username: &str, decrypted: &[u8], db: &UserDb) -> 
     if decrypted.len() < stored.len() {
         return false;
     }
-    let (head, tail) = decrypted.split_at(stored.len());
-    head == stored && tail.iter().all(|b| *b == 0)
+    // Pad the stored password with NULs to the blob length, then compare in
+    // constant time so a per-byte timing side channel cannot reveal a prefix
+    // match.
+    let mut padded = vec![0u8; decrypted.len()];
+    padded[..stored.len()].copy_from_slice(stored);
+    constant_time_eq(&padded, decrypted)
 }
 
 fn encode_reply_attrs(reply: &[RawReply], dictionary: &Dictionary) -> Result<Vec<RadiusAttribute>> {
