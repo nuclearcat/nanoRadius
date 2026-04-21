@@ -75,11 +75,22 @@ impl UserDb {
     }
 }
 
-pub fn verify_credentials(username: &str, password: &[u8], db: &UserDb) -> bool {
-    match db.get(username) {
-        Some(user) => user.password.as_bytes() == password,
-        None => false,
+/// Verify a PAP decryption blob against the stored password.
+///
+/// RFC 2865 pads the cleartext with trailing NULs to a 16-byte multiple and
+/// provides no length field. Comparing a NUL-stripped decryption would
+/// misjudge passwords that legitimately end in `\0`; instead, pad the stored
+/// password with NULs to match the blob length and compare the whole buffer.
+pub fn verify_pap_credentials(username: &str, decrypted: &[u8], db: &UserDb) -> bool {
+    let Some(user) = db.get(username) else {
+        return false;
+    };
+    let stored = user.password.as_bytes();
+    if decrypted.len() < stored.len() {
+        return false;
     }
+    let (head, tail) = decrypted.split_at(stored.len());
+    head == stored && tail.iter().all(|b| *b == 0)
 }
 
 fn encode_reply_attrs(reply: &[RawReply], dictionary: &Dictionary) -> Result<Vec<RadiusAttribute>> {
@@ -214,7 +225,7 @@ mod tests {
     }
 
     #[test]
-    fn verifies_credentials_against_db() {
+    fn verifies_pap_credentials_against_db() {
         let path = temp_db(
             r#"
             [[user]]
@@ -225,9 +236,28 @@ mod tests {
         let dict = Dictionary::builtin();
         let db = UserDb::load(&path, &dict).expect("db loaded");
 
-        assert!(verify_credentials("user", b"letmein", &db));
-        assert!(!verify_credentials("user", b"wrong", &db));
-        assert!(!verify_credentials("missing", b"letmein", &db));
+        // "letmein" padded with trailing NULs to 16 bytes, as RFC 2865 wire form.
+        let mut padded = b"letmein".to_vec();
+        padded.resize(16, 0);
+        assert!(verify_pap_credentials("user", &padded, &db));
+
+        // Password ending in a literal NUL: stored "abc\0", wire is 16 bytes.
+        let path2 = temp_db("[[user]]\nname = \"nul\"\npassword = \"abc\\u0000\"\n");
+        let db2 = UserDb::load(&path2, &dict).expect("db loaded");
+        let mut padded_nul = b"abc\0".to_vec();
+        padded_nul.resize(16, 0);
+        assert!(verify_pap_credentials("nul", &padded_nul, &db2));
+
+        // Wrong password of the same length must not match.
+        let mut wrong = b"wrongon".to_vec();
+        wrong.resize(16, 0);
+        assert!(!verify_pap_credentials("user", &wrong, &db));
+
+        // Unknown user.
+        assert!(!verify_pap_credentials("missing", &padded, &db));
+
+        // Decrypted blob shorter than stored password must not match.
+        assert!(!verify_pap_credentials("user", b"let", &db));
     }
 
     #[test]

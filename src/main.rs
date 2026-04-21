@@ -22,10 +22,10 @@ mod user_db;
 use chap_auth::verify_chap_password;
 use dictionary::Dictionary;
 use logger::Logger;
-use pap_auth::{decrypt_user_password, format_password_debug, trim_trailing_zeros};
+use pap_auth::{decrypt_user_password, format_password_debug, has_interior_nul, trim_trailing_zeros};
 use radius::{RadiusAttribute, RadiusCode, RadiusPacket};
 use server::{run_accounting_server, run_auth_server};
-use user_db::{UserDb, verify_credentials};
+use user_db::{UserDb, verify_pap_credentials};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
@@ -257,15 +257,25 @@ pub(crate) fn handle_auth_packet(
     let auth_result = if let Some(encrypted) = packet.attribute_value(2) {
         match decrypt_user_password(encrypted, &nas.secret, &packet.authenticator) {
             Ok(password) => {
-                let trimmed = trim_trailing_zeros(&password);
                 if state.debug {
-                    let preview = format_password_debug(trimmed);
+                    let preview = format_password_debug(trim_trailing_zeros(&password));
                     state.logger.debug(
                         true,
                         &format!("PAP password for {} = {}", username, preview),
                     );
                 }
-                if verify_credentials(&username, trimmed, &state.user_db) {
+                if has_interior_nul(&password) {
+                    state.logger.log(
+                        "WARN",
+                        &format!(
+                            "Decrypted PAP payload for {} from {} contains interior NUL byte(s) \
+                             (likely wrong shared secret or malformed client)",
+                            username,
+                            src.ip()
+                        ),
+                    );
+                }
+                if verify_pap_credentials(&username, &password, &state.user_db) {
                     true
                 } else {
                     reason = "invalid username/password".into();

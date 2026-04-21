@@ -58,6 +58,18 @@ pub fn trim_trailing_zeros(data: &[u8]) -> &[u8] {
     }
 }
 
+/// Detect NUL bytes in the middle of the decrypted PAP payload.
+///
+/// RFC 2865 only places NULs at the end (as padding to a 16-byte multiple),
+/// so an interior NUL suggests a wrong shared secret, corruption, or a
+/// non-conforming client. Callers should log a warning when this is true.
+pub fn has_interior_nul(decrypted: &[u8]) -> bool {
+    match decrypted.iter().rposition(|b| *b != 0) {
+        Some(last_nonzero) => decrypted[..last_nonzero].contains(&0),
+        None => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -113,6 +125,18 @@ mod tests {
     fn formats_password_debug_hex_for_non_utf8() {
         let rendered = format_password_debug(&[0xff, 0x00]);
         assert!(rendered.starts_with("hex="));
+    }
+
+    #[test]
+    fn detects_interior_nuls() {
+        // Trailing NULs only = padding, no warning.
+        assert!(!has_interior_nul(b"pass\0\0\0\0"));
+        assert!(!has_interior_nul(b"pass"));
+        // All zeros (empty password, fully padded) = no interior NUL.
+        assert!(!has_interior_nul(&[0u8; 16]));
+        // NUL before the last non-null byte is suspicious.
+        assert!(has_interior_nul(b"pa\0ss"));
+        assert!(has_interior_nul(b"\0pass\0\0"));
     }
 
     #[test]
