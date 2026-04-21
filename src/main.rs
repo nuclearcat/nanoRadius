@@ -146,17 +146,15 @@ fn run() -> Result<()> {
 
     let acct_state = state.clone();
     let acct_addr = config.server.listen_acct.clone();
-    let acct_handle = thread::spawn(move || {
+    let acct_logger = logger.clone();
+    thread::spawn(move || {
         if let Err(err) = run_accounting_server(&acct_addr, acct_state) {
-            eprintln!("Accounting server terminated: {err}");
+            acct_logger.log("ERROR", &format!("Accounting server terminated: {err}"));
         }
     });
 
-    if let Err(err) = run_auth_server(&config.server.listen_auth, state) {
-        logger.log("ERROR", &format!("Authentication server exited: {err}"));
-    }
-
-    let _ = acct_handle.join();
+    run_auth_server(&config.server.listen_auth, state)
+        .map_err(|err| format!("authentication server failed: {err}"))?;
     Ok(())
 }
 
