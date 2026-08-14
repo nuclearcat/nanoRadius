@@ -1,7 +1,8 @@
 [server]
 listen_auth = "0.0.0.0:1812"
 listen_acct = "0.0.0.0:1813"
-debug = true
+# debug = true writes decrypted PAP passwords to the log in cleartext.
+debug = false
 logfile = "/var/log/nanoradius/nanoradius.log"
 userdb = "/etc/nanoradius/users.toml"
 

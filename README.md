@@ -86,6 +86,17 @@ Default log path: `/var/log/nanoradius/nanoradius.log`
 docker run --rm -p 1812:1812/udp -p 1813:1813/udp ghcr.io/nuclearcat/nanoradius
 ```
 
+The bundled `/etc/nanoradius/nanoradius.toml` and `users.toml` are a demo
+configuration with published users and the shared secret `testing123`. Mount
+your own over them before exposing the container to anything:
+
+```bash
+docker run --rm -p 1812:1812/udp -p 1813:1813/udp \
+  -v /path/to/nanoradius.toml:/etc/nanoradius/nanoradius.toml:ro \
+  -v /path/to/users.toml:/etc/nanoradius/users.toml:ro \
+  ghcr.io/nuclearcat/nanoradius
+```
+
 ## Integration tests with radclient
 
 After building the release binary and installing `radclient` (package `freeradius-utils` on Debian/Ubuntu), run `scripts/radclient-tests.sh` to exercise PAP, CHAP, and accounting handling using the bundled CI config (`ci-nanoradius.toml`).
