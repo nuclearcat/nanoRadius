@@ -22,7 +22,9 @@ mod user_db;
 use chap_auth::verify_chap_password;
 use dictionary::Dictionary;
 use logger::Logger;
-use pap_auth::{decrypt_user_password, format_password_debug, has_interior_nul, trim_trailing_zeros};
+use pap_auth::{
+    decrypt_user_password, format_password_debug, has_interior_nul, trim_trailing_zeros,
+};
 use radius::{RadiusAttribute, RadiusCode, RadiusPacket};
 use server::{bind_socket, run_accounting_server, run_auth_server};
 use user_db::{UserDb, verify_pap_credentials};
