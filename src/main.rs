@@ -24,7 +24,7 @@ use dictionary::Dictionary;
 use logger::Logger;
 use pap_auth::{decrypt_user_password, format_password_debug, has_interior_nul, trim_trailing_zeros};
 use radius::{RadiusAttribute, RadiusCode, RadiusPacket};
-use server::{run_accounting_server, run_auth_server};
+use server::{bind_socket, run_accounting_server, run_auth_server};
 use user_db::{UserDb, verify_pap_credentials};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
@@ -142,18 +142,15 @@ fn run() -> Result<()> {
         dictionary,
     });
 
-    let acct_state = state.clone();
-    let acct_addr = config.server.listen_acct.clone();
-    let acct_logger = logger.clone();
-    thread::spawn(move || {
-        if let Err(err) = run_accounting_server(&acct_addr, acct_state) {
-            acct_logger.log("ERROR", &format!("Accounting server terminated: {err}"));
-        }
-    });
+    // Bind both sockets before serving anything: a listener that cannot claim
+    // its port is a fatal misconfiguration, not something to run without.
+    let auth_socket = bind_socket(&config.server.listen_auth)?;
+    let acct_socket = bind_socket(&config.server.listen_acct)?;
 
-    run_auth_server(&config.server.listen_auth, state)
-        .map_err(|err| format!("authentication server failed: {err}"))?;
-    Ok(())
+    let acct_state = state.clone();
+    thread::spawn(move || run_accounting_server(acct_socket, acct_state));
+
+    run_auth_server(auth_socket, state)
 }
 
 fn resolve_path(base: &Path, value: &str) -> PathBuf {
