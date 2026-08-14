@@ -20,7 +20,10 @@ listen_auth = "0.0.0.0:1812"
 listen_acct = "0.0.0.0:1813"
 debug = true
 logfile = "nanoradius.log"
-userdb = "users"
+userdb = "users.toml"
+# Discard Access-Requests that arrive without a Message-Authenticator.
+# Defaults to false; see "Hardening" below.
+require_message_authenticator = false
 
 [nas]
 [[nas.devices]]
@@ -86,6 +89,34 @@ docker run --rm -p 1812:1812/udp -p 1813:1813/udp ghcr.io/nuclearcat/nanoradius
 ## Integration tests with radclient
 
 After building the release binary and installing `radclient` (package `freeradius-utils` on Debian/Ubuntu), run `scripts/radclient-tests.sh` to exercise PAP, CHAP, and accounting handling using the bundled CI config (`ci-nanoradius.toml`).
+
+## Hardening
+
+**`require_message_authenticator`**
+
+RADIUS over UDP authenticates a response with an MD5 digest, which CVE-2024-3596
+(BlastRADIUS) shows can be forged by an attacker able to modify traffic between
+the NAS and the server. The defence is the Message-Authenticator attribute
+(RFC 3579), an HMAC-MD5 over the whole packet.
+
+nanoRadius always validates a Message-Authenticator when one is present, and
+always includes one in its reply when the request carried one. Setting
+`require_message_authenticator = true` additionally discards any Access-Request
+that arrives without one, which closes the attack.
+
+It defaults to `false` because older NASes omit the attribute for PAP and CHAP.
+Turn it on once you have confirmed every configured NAS sends one — a rejected
+request is logged as:
+
+```
+[WARN] Discarding Access-Request from 10.0.0.1 with no Message-Authenticator
+```
+
+**`debug`**
+
+`debug = true` writes decrypted PAP passwords to the log in cleartext. Use it
+only when diagnosing an authentication problem, and treat the resulting log file
+as a credential store.
 
 ## Troubleshooting
 

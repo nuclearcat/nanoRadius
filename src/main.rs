@@ -51,6 +51,14 @@ struct ServerConfig {
     debug: bool,
     logfile: Option<String>,
     userdb: String,
+    /// Discard Access-Requests that arrive without a Message-Authenticator.
+    ///
+    /// Defaults to false because older NASes omit the attribute for PAP and
+    /// CHAP, but enabling it is what closes CVE-2024-3596 (BlastRADIUS): the
+    /// attack rests on forging a response to a request the NAS never
+    /// integrity-protected.
+    #[serde(default)]
+    require_message_authenticator: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -76,6 +84,7 @@ pub(crate) struct NasDevice {
 pub(crate) struct SharedState {
     pub(crate) logger: Arc<logger::Logger>,
     pub(crate) debug: bool,
+    pub(crate) require_message_authenticator: bool,
     pub(crate) user_db: Arc<UserDb>,
     pub(crate) nas_map: Arc<HashMap<IpAddr, Arc<NasDevice>>>,
     pub(crate) dictionary: Arc<Dictionary>,
@@ -137,6 +146,7 @@ fn run() -> Result<()> {
     let state = Arc::new(SharedState {
         logger: logger.clone(),
         debug: config.server.debug,
+        require_message_authenticator: config.server.require_message_authenticator,
         user_db,
         nas_map,
         dictionary,
@@ -209,6 +219,17 @@ pub(crate) fn handle_auth_packet(
             state.logger.log(
                 "WARN",
                 &format!("Bad Message-Authenticator from {}", src.ip()),
+            );
+            return;
+        }
+        Ok(None) if state.require_message_authenticator => {
+            state.logger.log(
+                "WARN",
+                &format!(
+                    "Discarding Access-Request from {} with no Message-Authenticator \
+                     (require_message_authenticator = true)",
+                    src.ip()
+                ),
             );
             return;
         }
@@ -418,6 +439,7 @@ value = "5M/10M"
         let state = Arc::new(SharedState {
             logger: Arc::new(Logger::new(None)?),
             debug: false,
+            require_message_authenticator: false,
             user_db,
             nas_map: Arc::new(HashMap::new()),
             dictionary: Arc::new(dictionary),
