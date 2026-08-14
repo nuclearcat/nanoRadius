@@ -80,13 +80,21 @@ impl Dictionary {
             )
         })?;
         let raw: RawDictionary = toml::from_str(&contents)?;
-        Ok(Self::from_raw(raw))
+        Self::from_raw(raw).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("invalid dictionary {}: {}", path.display(), e),
+            )
+            .into()
+        })
     }
 
+    /// The dictionary compiled into the binary. Unlike a user-supplied file this
+    /// one ships with the build, so a defect in it is a bug, not a config error.
     pub fn builtin() -> Self {
         let raw: RawDictionary =
             toml::from_str(include_str!("../dictionary.toml")).expect("builtin dictionary parses");
-        Self::from_raw(raw)
+        Self::from_raw(raw).expect("builtin dictionary is well-formed")
     }
 
     pub fn code_for_name(&self, name: &str) -> Option<u8> {
@@ -301,19 +309,20 @@ impl Dictionary {
             .and_then(|meta| meta.enums.get(&value).map(|s| s.as_str()))
     }
 
-    fn from_raw(raw: RawDictionary) -> Self {
+    fn from_raw(raw: RawDictionary) -> Result<Self> {
         let mut attrs = HashMap::new();
         let mut names = HashMap::new();
         for (code_str, raw_attr) in raw.attributes {
-            let code: u8 = code_str.parse().expect("attribute code must be u8");
+            let code: u8 = parse_key(&code_str, "attribute code")?;
             let enums = raw_attr
                 .enums
                 .into_iter()
                 .map(|(k, v)| {
-                    let parsed: u32 = k.parse().expect("enum key must be u32");
-                    (parsed, v)
+                    let parsed: u32 =
+                        parse_key(&k, &format!("enum key for attribute '{}'", raw_attr.name))?;
+                    Ok((parsed, v))
                 })
-                .collect();
+                .collect::<Result<HashMap<u32, String>>>()?;
             names.insert(raw_attr.name.to_ascii_lowercase(), code);
             attrs.insert(
                 code,
@@ -327,13 +336,14 @@ impl Dictionary {
 
         let mut vendors = HashMap::new();
         for (vendor_id_str, raw_vendor) in raw.vendors {
-            let vendor_id: u32 = vendor_id_str.parse().expect("vendor ID must be u32");
+            let vendor_id: u32 = parse_key(&vendor_id_str, "vendor ID")?;
             let mut vendor_attrs = HashMap::new();
             let mut vendor_attr_names = HashMap::new();
             for (attr_code_str, raw_attr) in raw_vendor.attributes {
-                let attr_code: u8 = attr_code_str
-                    .parse()
-                    .expect("vendor attribute code must be u8");
+                let attr_code: u8 = parse_key(
+                    &attr_code_str,
+                    &format!("attribute code for vendor '{}'", raw_vendor.name),
+                )?;
                 vendor_attr_names.insert(raw_attr.name.to_ascii_lowercase(), attr_code);
                 vendor_attrs.insert(
                     attr_code,
@@ -353,12 +363,23 @@ impl Dictionary {
             );
         }
 
-        Self {
+        Ok(Self {
             attrs,
             names,
             vendors,
-        }
+        })
     }
+}
+
+/// Parse a TOML table key, which arrives as a string, into the numeric type the
+/// dictionary indexes on. Names the offending key so a typo in a hand-edited
+/// dictionary is a readable startup error rather than a panic.
+fn parse_key<T: std::str::FromStr>(key: &str, what: &str) -> Result<T>
+where
+    T::Err: std::fmt::Display,
+{
+    key.parse::<T>()
+        .map_err(|e| format!("invalid {} '{}': {}", what, key, e).into())
 }
 
 fn parse_integer(value: &[u8]) -> Option<u32> {
@@ -410,6 +431,59 @@ fn parse_kind(raw: Option<&str>) -> AttrType {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn load_dict(contents: &str) -> Result<Dictionary> {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let mut path = std::env::temp_dir();
+        path.push(format!("nanoradius-dict-{nonce}.toml"));
+        fs::write(&path, contents).expect("write temp dictionary");
+        let result = Dictionary::load_from_file(&path);
+        let _ = fs::remove_file(&path);
+        result
+    }
+
+    /// A hand-edited dictionary is user input; a bad key must be a startup
+    /// error naming the key, not a panic.
+    #[test]
+    fn malformed_keys_are_errors_not_panics() {
+        let cases = [
+            (
+                "[attributes]\n300 = { name = \"Bogus\" }\n",
+                "invalid attribute code '300'",
+            ),
+            (
+                "[attributes]\n40 = { name = \"Acct-Status-Type\", type = \"integer\", \
+                 enums = { \"abc\" = \"Start\" } }\n",
+                "invalid enum key for attribute 'Acct-Status-Type' 'abc'",
+            ),
+            (
+                "[vendors]\nnotanumber = { name = \"Acme\" }\n",
+                "invalid vendor ID 'notanumber'",
+            ),
+            (
+                "[vendors.14988]\nname = \"Mikrotik\"\n[vendors.14988.attributes]\n\
+                 999 = { name = \"Too-Big\" }\n",
+                "invalid attribute code for vendor 'Mikrotik' '999'",
+            ),
+        ];
+
+        for (contents, expected) in cases {
+            let Err(err) = load_dict(contents) else {
+                panic!("expected rejection for: {contents}");
+            };
+            let msg = err.to_string();
+            assert!(msg.contains(expected), "{msg} should contain {expected}");
+        }
+    }
+
+    #[test]
+    fn loads_a_valid_dictionary_from_file() {
+        let dict = load_dict("[attributes]\n11 = { name = \"Filter-Id\" }\n").expect("loads");
+        assert_eq!(dict.code_for_name("Filter-Id"), Some(11));
+    }
 
     #[test]
     fn describes_mikrotik_vsa() {
