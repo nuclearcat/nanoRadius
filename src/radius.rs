@@ -31,9 +31,9 @@ impl RadiusPacket {
             return Err("radius packet too short".into());
         }
         let length = u16::from_be_bytes([data[2], data[3]]);
-        if length as usize != data.len() || length < 20 {
-            return Err("invalid RADIUS length".into());
-        }
+        // RFC 2865 3: a datagram shorter than Length is malformed, but octets
+        // beyond Length are padding and must be ignored rather than rejected.
+        let data = payload(data, length)?;
         let mut authenticator = [0u8; 16];
         authenticator.copy_from_slice(&data[4..20]);
         let mut attributes = Vec::new();
@@ -149,9 +149,8 @@ impl RadiusPacket {
             return Err("radius packet too short".into());
         }
         let length = u16::from_be_bytes([data[2], data[3]]);
-        if length as usize != data.len() {
-            return Err("invalid RADIUS length".into());
-        }
+        // Padding past Length is not covered by the HMAC (RFC 2865 3).
+        let data = payload(data, length)?;
         let mut offset = 20usize;
         let mut mac_offset = None;
         while offset < data.len() {
@@ -193,6 +192,19 @@ pub enum RadiusCode {
     AccessReject = 3,
     AccountingRequest = 4,
     AccountingResponse = 5,
+}
+
+/// Trim a received datagram to the RADIUS packet it declares.
+///
+/// RFC 2865 section 3: "Octets outside the range of the Length field MUST be
+/// treated as padding and ignored on reception." A datagram *shorter* than
+/// Length is still malformed and rejected.
+fn payload(data: &[u8], length: u16) -> Result<&[u8]> {
+    if length < 20 {
+        return Err("invalid RADIUS length".into());
+    }
+    data.get(..length as usize)
+        .ok_or_else(|| "RADIUS packet shorter than its Length field".into())
 }
 
 fn hmac_md5(key: &[u8], data: &[u8]) -> [u8; 16] {
@@ -254,6 +266,54 @@ mod tests {
         assert_eq!(packet.identifier, 7);
         assert_eq!(packet.length, 20);
         assert_eq!(packet.attributes.len(), 0);
+    }
+
+    /// RFC 2865 3: octets past Length are padding and must be ignored, not
+    /// treated as a malformed packet.
+    #[test]
+    fn ignores_padding_past_length_field() {
+        let mut data = vec![0u8; 20];
+        data[0] = RadiusCode::AccessRequest as u8;
+        data[1] = 9;
+        data[2..4].copy_from_slice(&(27u16).to_be_bytes());
+        data[4..20].copy_from_slice(&[0xcd; 16]);
+        data.extend_from_slice(&[1u8, 7, b'a', b'l', b'i', b'c', b'e']);
+        let clean_len = data.len();
+        data.extend_from_slice(&[0u8; 5]); // padding
+
+        let packet = RadiusPacket::parse(&data).expect("padding is ignored");
+        assert_eq!(packet.length, 27);
+        assert_eq!(packet.attributes.len(), 1);
+        assert_eq!(packet.attribute_value(1), Some(b"alice".as_slice()));
+
+        // The digest must be taken over the packet only, so padding cannot
+        // change the outcome of a Message-Authenticator check either.
+        let secret = "sharedsecret";
+        let padded = RadiusPacket::verify_message_authenticator(&data, secret).unwrap();
+        let clean = RadiusPacket::verify_message_authenticator(&data[..clean_len], secret).unwrap();
+        assert_eq!(padded, clean);
+    }
+
+    #[test]
+    fn rejects_packet_shorter_than_length_field() {
+        let mut data = vec![0u8; 20];
+        data[0] = RadiusCode::AccessRequest as u8;
+        data[2..4].copy_from_slice(&(40u16).to_be_bytes());
+        let Err(err) = RadiusPacket::parse(&data) else {
+            panic!("truncated packet must be rejected");
+        };
+        assert!(err.to_string().contains("shorter than its Length"));
+    }
+
+    #[test]
+    fn rejects_length_below_header_size() {
+        let mut data = vec![0u8; 20];
+        data[0] = RadiusCode::AccessRequest as u8;
+        data[2..4].copy_from_slice(&(19u16).to_be_bytes());
+        let Err(err) = RadiusPacket::parse(&data) else {
+            panic!("undersized Length must be rejected");
+        };
+        assert!(err.to_string().contains("invalid RADIUS length"));
     }
 
     #[test]
