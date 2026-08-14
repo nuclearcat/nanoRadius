@@ -4,6 +4,9 @@
 use crate::Result;
 use md5::{Digest, Md5};
 
+/// Proxy-State (RFC 2865 section 5.33).
+pub const PROXY_STATE: u8 = 33;
+
 #[derive(Clone)]
 pub struct RadiusAttribute {
     pub typ: u8,
@@ -58,6 +61,27 @@ impl RadiusPacket {
             .iter()
             .find(|attr| attr.typ == typ)
             .map(|attr| attr.data.as_slice())
+    }
+
+    /// Proxy-State attributes carried by the request, in receive order.
+    ///
+    /// RFC 2865 section 5.33 requires the server to return every Proxy-State it
+    /// received, unmodified and in the same order, so that a proxy chain can
+    /// match the reply back to the request it forwarded. RFC 2866 section 4.1
+    /// imposes the same rule on Accounting-Response.
+    pub fn proxy_state(&self) -> impl Iterator<Item = &RadiusAttribute> {
+        self.attributes
+            .iter()
+            .filter(|attr| attr.typ == PROXY_STATE)
+    }
+
+    /// Reply attribute list for this request: `attributes`, then every
+    /// Proxy-State from the request appended in order (RFC 2865 section 5.33
+    /// requires Proxy-State to follow the other attributes).
+    pub fn reply_attributes(&self, attributes: &[RadiusAttribute]) -> Vec<RadiusAttribute> {
+        let mut out = attributes.to_vec();
+        out.extend(self.proxy_state().cloned());
+        out
     }
 
     pub fn build_response(
@@ -255,6 +279,60 @@ mod tests {
             RadiusPacket::build_response(RadiusCode::AccessAccept, &request, "secret", &[big_attr])
                 .unwrap_err();
         assert!(err.to_string().contains("too long"));
+    }
+
+    #[test]
+    fn reply_echoes_proxy_state_in_order_after_other_attributes() {
+        let request = RadiusPacket {
+            code: RadiusCode::AccessRequest as u8,
+            identifier: 3,
+            length: 20,
+            authenticator: [0x55; 16],
+            attributes: vec![
+                RadiusAttribute {
+                    typ: PROXY_STATE,
+                    data: b"first".to_vec(),
+                },
+                RadiusAttribute {
+                    typ: 1,
+                    data: b"alice".to_vec(),
+                },
+                RadiusAttribute {
+                    typ: PROXY_STATE,
+                    data: b"second".to_vec(),
+                },
+            ],
+        };
+        let reply = RadiusAttribute {
+            typ: 11,
+            data: b"filter".to_vec(),
+        };
+
+        let attrs = request.reply_attributes(std::slice::from_ref(&reply));
+        let shape: Vec<(u8, &[u8])> = attrs.iter().map(|a| (a.typ, a.data.as_slice())).collect();
+        assert_eq!(
+            shape,
+            vec![
+                (11u8, b"filter".as_slice()),
+                (PROXY_STATE, b"first".as_slice()),
+                (PROXY_STATE, b"second".as_slice()),
+            ]
+        );
+    }
+
+    #[test]
+    fn reply_without_proxy_state_is_unchanged() {
+        let request = RadiusPacket {
+            code: RadiusCode::AccessRequest as u8,
+            identifier: 4,
+            length: 20,
+            authenticator: [0u8; 16],
+            attributes: vec![RadiusAttribute {
+                typ: 1,
+                data: b"bob".to_vec(),
+            }],
+        };
+        assert!(request.reply_attributes(&[]).is_empty());
     }
 
     #[test]

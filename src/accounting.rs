@@ -84,7 +84,14 @@ pub fn handle_accounting_packet(
         logger.debug(true, &format!("Attributes: {}", attributes));
     }
 
-    match RadiusPacket::build_response(RadiusCode::AccountingResponse, &packet, &nas.secret, &[]) {
+    // RFC 2866 4.1: Proxy-State from the request must be echoed unmodified.
+    let reply_attrs = packet.reply_attributes(&[]);
+    match RadiusPacket::build_response(
+        RadiusCode::AccountingResponse,
+        &packet,
+        &nas.secret,
+        &reply_attrs,
+    ) {
         Ok(response) => {
             if let Err(err) = socket.send_to(&response, src) {
                 logger.log(

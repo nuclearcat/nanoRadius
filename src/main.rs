@@ -344,7 +344,10 @@ fn send_access_response(
     state: &Arc<SharedState>,
     attributes: &[RadiusAttribute],
 ) {
-    match RadiusPacket::build_response(code, request, secret, attributes) {
+    // Proxy-State from the request is appended to every reply, accept or
+    // reject, so a proxy in front of us can route the response (RFC 2865 5.33).
+    let attributes = request.reply_attributes(attributes);
+    match RadiusPacket::build_response(code, request, secret, &attributes) {
         Ok(response) => {
             if let Err(err) = socket.send_to(&response, dest) {
                 state
