@@ -7,6 +7,10 @@ use md5::{Digest, Md5};
 /// Proxy-State (RFC 2865 section 5.33).
 pub const PROXY_STATE: u8 = 33;
 
+/// Message-Authenticator (RFC 3579 section 3.2).
+pub const MESSAGE_AUTHENTICATOR: u8 = 80;
+const MESSAGE_AUTHENTICATOR_LEN: usize = 16;
+
 #[derive(Clone)]
 pub struct RadiusAttribute {
     pub typ: u8,
@@ -95,7 +99,15 @@ impl RadiusPacket {
                 return Err("attribute value too long (>253 bytes)".into());
             }
         }
-        let attr_len: usize = attributes.iter().map(|a| a.data.len() + 2).sum();
+        // RFC 3579 3.2: a request carrying a Message-Authenticator must be
+        // answered with one, so the NAS can authenticate our reply.
+        let echo_authenticator = request
+            .attribute_value(MESSAGE_AUTHENTICATOR)
+            .is_some_and(|v| v.len() == MESSAGE_AUTHENTICATOR_LEN);
+        let mut attr_len: usize = attributes.iter().map(|a| a.data.len() + 2).sum();
+        if echo_authenticator {
+            attr_len += MESSAGE_AUTHENTICATOR_LEN + 2;
+        }
         if attr_len + 20 > u16::MAX as usize {
             return Err("RADIUS packet length exceeds u16::MAX".into());
         }
@@ -104,18 +116,28 @@ impl RadiusPacket {
         buffer.push(code as u8);
         buffer.push(request.identifier);
         buffer.extend_from_slice(&length.to_be_bytes());
-        buffer.extend_from_slice(&[0u8; 16]);
+        // Both digests below are taken over the Request Authenticator, so keep
+        // it in the buffer until the Response Authenticator overwrites it.
+        buffer.extend_from_slice(&request.authenticator);
         for attr in attributes {
             buffer.push(attr.typ);
             buffer.push((attr.data.len() + 2) as u8);
             buffer.extend_from_slice(&attr.data);
         }
-        let mut ctx = Md5::new();
-        ctx.update(&buffer[0..4]);
-        ctx.update(request.authenticator);
-        if buffer.len() > 20 {
-            ctx.update(&buffer[20..]);
+
+        if echo_authenticator {
+            let mac_pos = buffer.len() + 2;
+            buffer.push(MESSAGE_AUTHENTICATOR);
+            buffer.push((MESSAGE_AUTHENTICATOR_LEN + 2) as u8);
+            buffer.extend_from_slice(&[0u8; MESSAGE_AUTHENTICATOR_LEN]);
+            let mac = hmac_md5(secret.as_bytes(), &buffer);
+            buffer[mac_pos..mac_pos + MESSAGE_AUTHENTICATOR_LEN].copy_from_slice(&mac);
         }
+
+        // Response Authenticator = MD5(Code+ID+Length+RequestAuth+Attrs+Secret),
+        // computed after Message-Authenticator is in place (RFC 2865 3).
+        let mut ctx = Md5::new();
+        ctx.update(&buffer);
         ctx.update(secret.as_bytes());
         let digest = ctx.finalize();
         buffer[4..20].copy_from_slice(digest.as_slice());
@@ -141,7 +163,7 @@ impl RadiusPacket {
             if attr_len < 2 || offset + attr_len > data.len() {
                 return Err("invalid attribute length".into());
             }
-            if typ == 80 {
+            if typ == MESSAGE_AUTHENTICATOR {
                 mac_offset = Some((offset + 2, attr_len - 2));
                 break;
             }
@@ -279,6 +301,75 @@ mod tests {
             RadiusPacket::build_response(RadiusCode::AccessAccept, &request, "secret", &[big_attr])
                 .unwrap_err();
         assert!(err.to_string().contains("too long"));
+    }
+
+    /// A request carrying a Message-Authenticator must be answered with one,
+    /// and the NAS validates it by zeroing the attribute and re-running
+    /// HMAC-MD5 over the response with the Request Authenticator in place.
+    #[test]
+    fn response_carries_message_authenticator_when_request_did() {
+        let secret = "sharedsecret";
+        let request = RadiusPacket {
+            code: RadiusCode::AccessRequest as u8,
+            identifier: 9,
+            length: 20,
+            authenticator: [0x77; 16],
+            attributes: vec![RadiusAttribute {
+                typ: MESSAGE_AUTHENTICATOR,
+                data: vec![0xAA; 16],
+            }],
+        };
+        let reply = RadiusAttribute {
+            typ: 11,
+            data: b"filter".to_vec(),
+        };
+
+        let response = RadiusPacket::build_response(
+            RadiusCode::AccessAccept,
+            &request,
+            secret,
+            std::slice::from_ref(&reply),
+        )
+        .unwrap();
+        let parsed = RadiusPacket::parse(&response).expect("response parses");
+
+        let mac = parsed
+            .attribute_value(MESSAGE_AUTHENTICATOR)
+            .expect("Message-Authenticator present");
+        assert_eq!(mac.len(), 16);
+        assert_ne!(mac, [0u8; 16]);
+
+        // Recompute as the NAS does: Request Authenticator in the header,
+        // Message-Authenticator zeroed.
+        let mac_pos = response.len() - 16;
+        let mut scratch = response.clone();
+        scratch[4..20].copy_from_slice(&request.authenticator);
+        scratch[mac_pos..].fill(0);
+        assert_eq!(hmac_md5(secret.as_bytes(), &scratch), mac);
+
+        // The Response Authenticator must cover the filled-in
+        // Message-Authenticator, not the zeroed placeholder.
+        let mut ctx = Md5::new();
+        ctx.update(&response[0..4]);
+        ctx.update(request.authenticator);
+        ctx.update(&response[20..]);
+        ctx.update(secret.as_bytes());
+        assert_eq!(parsed.authenticator, ctx.finalize().as_slice());
+    }
+
+    #[test]
+    fn response_omits_message_authenticator_when_request_lacked_one() {
+        let request = RadiusPacket {
+            code: RadiusCode::AccessRequest as u8,
+            identifier: 9,
+            length: 20,
+            authenticator: [0x11; 16],
+            attributes: Vec::new(),
+        };
+        let response =
+            RadiusPacket::build_response(RadiusCode::AccessAccept, &request, "s", &[]).unwrap();
+        let parsed = RadiusPacket::parse(&response).unwrap();
+        assert!(parsed.attribute_value(MESSAGE_AUTHENTICATOR).is_none());
     }
 
     #[test]
